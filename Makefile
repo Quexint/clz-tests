@@ -1,60 +1,25 @@
-CC ?= gcc
-CFLAGS_common ?= -Wall -std=gnu99
-CFLAGS_orig = -O0
-CFLAGS_opt  = -O0
+CC = gcc
+CFLAGS = -O0 -std=gnu99 -Wall
+EXECUTABLE = \
+	benchmark_clock_gettime
 
-EXEC = clz_iter clz_recur clz_bsearch clz_byteshift clz_harley
-all: $(EXEC)
+default: clz.o
+	$(CC) $(CFLAGS) clz.o benchmark_clock_gettime.c -o benchmark_clock_gettime
 
-SRCS_common = main.c
+.PHONY: clean default
 
-all: $(EXEC)
+%.o: %.c
+	$(CC) -c $(CFLAGS) $< -o $@ 
 
+gencsv: default
+	echo "N Iter Recur BShift BSearch Harley"> result_clock_gettime.csv
+	for i in `seq 1 20000`; do \
+		printf "%d " $$i;\
+		./benchmark_clock_gettime $$i; \
+	done >> result_clock_gettime.csv
 
-clz_iter: $(SRCS_common) clz_iter.c clz_iter.h
-	$(CC) $(CFLAGS_common) $(CFLAGS_orig) \
-		-DIMPL="\"$@.h\"" -g -o $@ \
-		$(SRCS_common) $@.c
+plot: default gencsv
+	gnuplot runtime.gp
 
-clz_recur: $(SRCS_common) clz_recur.c clz_recur.h
-	$(CC) $(CFLAGS_common) $(CFLAGS_orig) \
-		-DIMPL="\"$@.h\"" -g -o $@ \
-		$(SRCS_common) $@.c
-
-clz_bsearch: $(SRCS_common) clz_bsearch.c clz_bsearch.h
-	$(CC) $(CFLAGS_common) $(CFLAGS_orig) \
-		-DIMPL="\"$@.h\"" -g -o $@ \
-		$(SRCS_common) $@.c
-
-clz_byteshift: $(SRCS_common) clz_byteshift.c clz_byteshift.h
-	$(CC) $(CFLAGS_common) $(CFLAGS_orig) \
-		-DIMPL="\"$@.h\"" -g -o $@ \
-		$(SRCS_common) $@.c
-
-clz_harley: $(SRCS_common) clz_harley.c clz_harley.h
-	$(CC) $(CFLAGS_common) $(CFLAGS_orig) \
-		-DIMPL="\"$@.h\"" -g -o $@ \
-		$(SRCS_common) $@.c
-
-run: $(EXEC)
-	echo 3 | sudo tee /proc/sys/vm/drop_caches
-	watch -d -t "./clz_iter && echo 3 | sudo tee /proc/sys/vm/drop_caches"
-
-cache-test: $(EXEC)
-	perf stat --repeat 100 \
-		-e cache-misses,cache-references,instructions,cycles \
-		./clz
-
-#output.txt: cache-test calculate
-#	./calculate
-#
-#plot: output.txt
-#	gnuplot scripts/runtime.gp
-#
-#calculate: calculate.c
-#	$(CC) $(CFLAGS_common) $^ -o $@
-
-.PHONY: clean
 clean:
-	$(RM) $(EXEC) *.o perf.* \
-	      	calculate orig.txt opt.txt output.txt runtime.png
+	rm -f $(EXECUTABLE) *.o *.s result_clock_gettime.csv result_error_rate.csv *.png
